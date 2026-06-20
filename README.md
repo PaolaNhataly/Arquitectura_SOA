@@ -1,91 +1,170 @@
 # Tarea 2 — Infraestructura SOA con ESB
 
-## Qué hay armado ahora
-- `servicio-clientes` (puerto 8081): servicio SOAP contract-first, consume
-  [randomuser.me](https://randomuser.me) para simular personas (nombre, email),
-  usando el `id` como seed para resultados repetibles.
-- `servicio-productos` (puerto 8082): mismo patrón, consume
-  [Fake Store API](https://fakestoreapi.com) (`GET /products/{id}`) para traer
-  productos reales (nombre, categoría, precio). Ids válidos: **1 al 20**.
-  WSDL en `http://localhost:8082/ws/productos.wsdl`.
-- Ambos caen a datos quemados si la API externa falla, para que el servicio
-  nunca se rompa.
-- `esb-camel` (puerto 8080): el **bus**, hecho con Apache Camel. De cara al
-  cliente, **todo es JSON** — por dentro sigue traduciendo a SOAP para
-  hablar con cada servicio:
-  - `GET http://localhost:8080/esb/clientes` → lista 10 clientes de ejemplo (ids 1-10)
-  - `GET http://localhost:8080/esb/clientes/{id}`
-  - `GET http://localhost:8080/esb/productos` → lista 10 productos de ejemplo (ids 1-10)
-  - `GET http://localhost:8080/esb/productos/{id}`
-  - `GET http://localhost:8080/esb/pedidos` → lista todos los pedidos
-  - `POST http://localhost:8080/esb/pedidos` con body
-    `{"clienteId": 1, "productoId": 5, "cantidad": 2}` → registra uno nuevo
+Infraestructura de arquitectura **SOA**: 3 servicios SOAP con contrato propio
+(WSDL/XSD), registrados y enrutados por un **ESB** (Apache Camel), con un
+servicio persistiendo en PostgreSQL bajo **Clean Architecture**. De cara al
+cliente final, todo se consume en JSON — el ESB es quien traduce a SOAP por
+dentro.
 
-  El cliente final (Postman, o luego `cliente-app`) solo necesita conocer
-  estas URLs del ESB — nunca llama directo a los puertos 8081/8082/8083.
-  Las rutas y el "registro" de cada servicio están en `EsbRoutes.java`.
+---
 
-  **Documentación interactiva (OpenAPI/Swagger):** Camel genera el
-  documento OpenAPI automáticamente a partir de las rutas REST.
-  - Spec JSON: `http://localhost:8080/api-doc`
-  - Swagger UI (para explorar y probar desde el navegador):
-    `http://localhost:8080/swagger-ui/index.html`
+## 🗺️ Mapa rápido
 
-  Nota: el WSDL de cada servicio SOAP (`servicio-clientes`,
-  `servicio-productos`, `servicio-pedidos`) sigue siendo su propio
-  contrato — OpenAPI documenta el ESB porque es la única pieza que
-  habla REST/JSON; SOAP se documenta con WSDL, no con OpenAPI.
-- `servicio-pedidos` (puerto 8083) + `db-pedidos` (PostgreSQL): el tercer
-  servicio del contrato, con persistencia real y **Clean Architecture**
-  (puertos y adaptadores):
-  ```
-  domain/          → Pedido, ClienteInfo, ProductoInfo (Java puro, sin Spring/JPA)
-  application/      → RegistrarPedidoUseCase, ListarPedidosUseCase
-    port/           → interfaces: PedidoRepositoryPort, ClienteGatewayPort, ProductoGatewayPort
-  infrastructure/
-    soap/           → PedidoEndpoint (solo traduce) + adaptadores SOAP que implementan los ports
-    persistence/    → PedidoJpaEntity + adaptador que implementa PedidoRepositoryPort
-    config/         → WSDL y RestTemplate
-  contract/         → generado por JAXB a partir de pedidos.xsd (no se edita a mano)
-  ```
-  Dos operaciones SOAP:
-  - `registrarPedido` — recibe `clienteId`, `productoId`, `cantidad`. El caso
-    de uso llama a los puertos `ClienteGatewayPort`/`ProductoGatewayPort`
-    (composición de servicios SOA) para enriquecer los datos, calcula el
-    total dentro del objeto de dominio, y los adaptadores de infraestructura
-    se encargan de guardar en Postgres.
-  - `listarPedidos` — devuelve todos los pedidos ya guardados.
+| Componente | Puerto | Habla | Rol |
+|---|---|---|---|
+| `servicio-clientes` | 8081 | SOAP | Datos de clientes (randomuser.me) |
+| `servicio-productos` | 8082 | SOAP | Datos de productos (Fake Store API) |
+| `servicio-pedidos` | 8083 | SOAP | Registra/lista pedidos · PostgreSQL · Clean Architecture |
+| `db-pedidos` | 5432 (interno) | PostgreSQL | Persistencia de pedidos |
+| `esb-camel` | 8080 | REST/JSON ↔ SOAP | El **bus**: traduce y enruta a los 3 servicios |
 
-  WSDL en `http://localhost:8083/ws/pedidos.wsdl`. Si `servicio-clientes` o
-  `servicio-productos` no responden al registrar, igual se guarda el pedido
-  marcando el dato como "no verificado" en vez de fallar todo.
-- `docker-compose.yml`: ya construye y levanta los cinco contenedores
-  (3 servicios + Postgres + ESB), en el orden correcto (Postgres espera a
-  estar realmente listo — `healthcheck` — antes de que arranque `servicio-pedidos`).
+---
 
-> Nota: los contenedores necesitan salida a internet para llegar a las APIs
-> externas. Con Docker Desktop por defecto ya la tienen, no hace falta
-> configurar nada extra.
+## 🔗 URLs para probar
 
-## Cómo probarlo
+| # | URL | Qué hace |
+|---|---|---|
+| 1 | `http://localhost:8081/ws/clientes.wsdl` | Contrato de `servicio-clientes` — confirma que está arriba y muestra su WSDL |
+| 2 | `http://localhost:8082/ws/productos.wsdl` | Contrato de `servicio-productos` |
+| 3 | `http://localhost:8083/ws/pedidos.wsdl` | Contrato de `servicio-pedidos` |
+| 4 | `http://localhost:8080/swagger-ui/index.html` | **ESB** — el único que se puede probar 100% desde el navegador (botón "Try it out", sin Postman) |
+
+> Los WSDL (1, 2, 3) se pueden **ver** en el navegador para confirmar que el
+> servicio está corriendo y revisar su contrato, pero **invocar** una
+> operación SOAP sí requiere un cliente (Postman en modo SOAP, SoapUI, o el
+> propio ESB). El único que de verdad se "ejecuta" desde el navegador es el
+> ESB (4), porque habla JSON.
+
+---
+
+## ▶️ Cómo levantarlo
+
 ```bash
+cd tarea2-soa
 docker compose up --build
 ```
-Luego abre en el navegador:
+
+Luego entra a `http://localhost:8080/swagger-ui/index.html` y prueba
+`GET /esb/clientes`, `GET /esb/productos` o `POST /esb/pedidos`.
+
+> Los contenedores necesitan salida a internet para llegar a randomuser.me y
+> Fake Store API. Con Docker Desktop por defecto ya la tienen.
+
+---
+
+## 🧩 Cómo se relaciona esto con arquitectura SOA
+
+SOA no es "usar SOAP" — es un conjunto de principios de diseño. Esta tabla
+conecta cada uno con una pieza concreta de este proyecto:
+
+| Principio SOA | Dónde se ve aquí |
+|---|---|
+| **Contrato estandarizado** | Cada servicio nace de un XSD/WSDL (`clientes.xsd`, `productos.xsd`, `pedidos.xsd`) escrito **antes** que el código (contract-first) |
+| **Acoplamiento débil** | Los servicios solo se conocen por su contrato XML. `servicio-pedidos` nunca sabe que `servicio-clientes` usa randomuser.me por dentro |
+| **Abstracción** | El WSDL expone *qué* operación existe, no *cómo* está implementada — la API externa, el cálculo del total, todo queda oculto detrás del contrato |
+| **Reutilización** | `servicio-clientes` y `servicio-productos` no son de uso exclusivo del ESB: `servicio-pedidos` también los consume directamente |
+| **Autonomía** | Cada servicio vive en su propio contenedor, con su propio ciclo de vida; `servicio-pedidos` además tiene su propia base de datos |
+| **Composición de servicios** | `servicio-pedidos` combina respuestas de `servicio-clientes` + `servicio-productos` para construir un pedido completo |
+| **Sin estado** | Cada llamada SOAP es independiente; ninguna operación depende de una sesión previa |
+| **Descubribilidad** | El WSDL describe operaciones, parámetros y tipos sin necesidad de leer el código fuente |
+| **Mediación centralizada (ESB)** | El bus traduce protocolo (JSON↔SOAP), enruta y agrega respuestas — el cliente final nunca necesita saber que SOAP existe |
+
+**Contrato vs. implementación — la idea que sostiene todo lo anterior:**
+
+```mermaid
+flowchart LR
+    subgraph Contrato["📄 Contrato — lo único visible para afuera"]
+        XSD[productos.xsd]
+        WSDL[productos.wsdl]
+    end
+    subgraph Impl["⚙️ Implementación — oculta, puede cambiar sin avisar"]
+        EP[ProductoEndpoint]
+        API[Fake Store API]
+    end
+
+    Cliente(("Cualquier<br/>consumidor")) -->|solo conoce| Contrato
+    Contrato -.describe.-> Impl
+    Impl -->|usa por dentro| API
+
+    style Contrato fill:#90be6d,stroke:#333,stroke-width:2px
+    style Impl fill:#577590,color:#fff,stroke:#333,stroke-width:2px
 ```
-http://localhost:8081/ws/clientes.wsdl
+
+Si mañana `servicio-productos` deja de usar Fake Store API y pasa a leer de
+una base de datos propia, **nada de afuera se entera** — el contrato
+(`productos.xsd`/`productos.wsdl`) no cambia. Esa es la garantía que da SOA.
+
+---
+
+## 🛠️ Detalle de cada componente
+
+### `servicio-clientes` (8081)
+SOAP contract-first. Consume [randomuser.me](https://randomuser.me) usando
+el `id` recibido como *seed*, así el mismo id siempre devuelve la misma
+persona simulada (resultados repetibles). Si la API externa falla, cae a
+datos quemados para no romperse.
+
+### `servicio-productos` (8082)
+Mismo patrón, consume [Fake Store API](https://fakestoreapi.com)
+(`GET /products/{id}`). Ids válidos: **1 al 20**. Mismo respaldo ante
+fallos de la API externa.
+
+### `servicio-pedidos` (8083) + `db-pedidos` (PostgreSQL)
+El servicio con lógica real, estructurado en **Clean Architecture**
+(puertos y adaptadores):
+
 ```
-Para probar la operación puedes usar SoapUI, Postman (modo SOAP) o un cliente
-generado con `wsimport`/`cxf-codegen` apuntando a ese WSDL.
+domain/           → Pedido, ClienteInfo, ProductoInfo — Java puro, sin Spring/JPA
+application/      → RegistrarPedidoUseCase, ListarPedidosUseCase
+  port/           → interfaces: PedidoRepositoryPort, ClienteGatewayPort, ProductoGatewayPort
+infrastructure/
+  soap/           → PedidoEndpoint (solo traduce) + adaptadores SOAP que implementan los ports
+  persistence/    → PedidoJpaEntity + adaptador que implementa PedidoRepositoryPort
+  config/         → WSDL y RestTemplate
+contract/         → generado por JAXB a partir de pedidos.xsd (no se edita a mano)
+```
 
-## Próximos pasos (en orden)
+Dos operaciones:
+- **`registrarPedido`** — recibe `clienteId`, `productoId`, `cantidad`. El
+  caso de uso consulta `servicio-clientes` y `servicio-productos`
+  (composición de servicios) para enriquecer los datos, calcula el total
+  dentro del objeto de dominio, y un adaptador de infraestructura guarda en
+  Postgres. Si alguno de los otros dos servicios no responde, igual se
+  registra el pedido marcando el dato como "no verificado".
+- **`listarPedidos`** — devuelve todos los pedidos ya guardados.
 
-1. **Construir `cliente-app`**: una app simple que llame solo al ESB
-   (`http://esb:8080/esb/...` dentro de la red Docker), nunca directo a los
-   servicios.
-2. **Descomentar** `cliente-app` en el compose y levantar todo junto.
+### `esb-camel` (8080) — el bus
+De cara al cliente, **todo es JSON**; por dentro sigue hablando SOAP con los
+3 servicios:
 
-## Diagramas
+| Endpoint | Qué hace |
+|---|---|
+| `GET /esb/clientes` | Lista 10 clientes de ejemplo (ids 1-10) |
+| `GET /esb/clientes/{id}` | Un cliente puntual |
+| `GET /esb/productos` | Lista 10 productos de ejemplo (ids 1-10) |
+| `GET /esb/productos/{id}` | Un producto puntual |
+| `GET /esb/pedidos` | Lista todos los pedidos registrados |
+| `POST /esb/pedidos` | Registra uno nuevo — body `{"clienteId": 1, "productoId": 5, "cantidad": 2}` |
+
+El cliente final nunca llama directo a los puertos 8081/8082/8083 — solo
+conoce el ESB. Las rutas y el "registro" de cada servicio viven en
+`EsbRoutes.java`. Tiene manejo de errores centralizado (si un servicio
+interno falla, el ESB responde con JSON explicando el problema en vez de
+un 500 vacío) — eso también es trabajo típico de un ESB: aislar al cliente
+de los fallos internos.
+
+**Documentación interactiva (OpenAPI/Swagger):** Camel genera el documento
+OpenAPI automáticamente a partir de las rutas REST.
+- Spec JSON: `http://localhost:8080/api-doc`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+> El WSDL de cada servicio SOAP sigue siendo su propio contrato — OpenAPI
+> documenta el ESB porque es la única pieza que habla REST/JSON; SOAP se
+> documenta con WSDL, no con OpenAPI.
+
+---
+
+## 📊 Diagramas
 
 ### Arquitectura general
 ```mermaid
@@ -165,7 +244,17 @@ flowchart LR
     CA -.implementa.-> Port1
     PA -.implementa.-> Port2
     RA -.implementa.-> Port3
+```
 
+---
+
+## 🚧 Próximos pasos
+
+1. **Construir `cliente-app`**: una app simple que llame solo al ESB
+   (`http://esb:8080/esb/...` dentro de la red Docker), nunca directo a los
+   servicios.
+2. **Descomentar** `cliente-app` en el `docker-compose.yml` y levantar todo
+   junto.
 
 docker-compose down (o docker compose down)
 
