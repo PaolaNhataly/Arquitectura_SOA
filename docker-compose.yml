@@ -1,0 +1,78 @@
+services:
+
+  servicio-clientes:
+    build: ./servicio-clientes
+    container_name: servicio-clientes
+    ports:
+      - "8081:8081"
+    networks:
+      - soa-network
+
+  servicio-productos:
+    build: ./servicio-productos
+    container_name: servicio-productos
+    ports:
+      - "8082:8082"
+    networks:
+      - soa-network
+
+  db-pedidos:
+    image: postgres:16-alpine
+    container_name: db-pedidos
+    environment:
+      POSTGRES_DB: pedidos_db
+      POSTGRES_USER: pedidos_user
+      POSTGRES_PASSWORD: pedidos_pass
+    volumes:
+      - pedidos-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pedidos_user -d pedidos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - soa-network
+
+  servicio-pedidos:
+    build: ./servicio-pedidos
+    container_name: servicio-pedidos
+    ports:
+      - "8083:8083"
+    depends_on:
+      db-pedidos:
+        condition: service_healthy
+      servicio-clientes:
+        condition: service_started
+      servicio-productos:
+        condition: service_started
+    networks:
+      - soa-network
+
+  esb:
+    build: ./esb-camel
+    container_name: esb
+    ports:
+      - "8080:8080"
+    depends_on:
+      - servicio-clientes
+      - servicio-productos
+      - servicio-pedidos
+    networks:
+      - soa-network
+
+  # --- Próximo paso: app cliente ---
+  #
+  # cliente-app:
+  #   build: ./cliente-app
+  #   container_name: cliente-app
+  #   depends_on:
+  #     - esb
+  #   networks:
+  #     - soa-network
+
+networks:
+  soa-network:
+    driver: bridge
+
+volumes:
+  pedidos-data:
