@@ -70,6 +70,21 @@ services:
   #   networks:
   #     - soa-network
 
+  # ── NUEVO: Cliente app ───────────────────────────────────────────────────────
+  cliente-app:
+    build:
+      context: ./cliente-app
+    container_name: cliente-app
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+    depends_on:
+      - esb
+    networks:
+      - soa-network
+    restart: unless-stopped
+
 networks:
   soa-network:
     driver: bridge

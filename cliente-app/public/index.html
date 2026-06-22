@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOA Client</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --surface2: #1e2530;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #7d8590;
+      --blue:     #58a6ff;
+      --blue-dim: #1f3a5f;
+      --amber:    #d29922;
+      --amber-dim:#3d2b00;
+      --green:    #3fb950;
+      --green-dim:#0d2a13;
+      --purple:   #a371f7;
+      --purple-dim:#2d1f5e;
+      --red:      #f85149;
+      --red-dim:  #3d0f0f;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      --sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --radius:   6px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+    .logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .esb-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: var(--blue-dim);
+      color: var(--blue);
+      border: 1px solid #1f4070;
+      margin-left: auto;
+    }
+
+    /* ── Nav tabs ── */
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 13px;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--text); border-bottom-color: var(--blue); }
+    .tab-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+    .dot-clientes  { background: var(--amber); }
+    .dot-productos { background: var(--green); }
+    .dot-pedidos   { background: var(--purple); }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      padding: 24px;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .endpoint-chip {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      font-family: var(--sans);
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: var(--blue-dim);
+      color: var(--blue);
+      border-color: #1f4070;
+    }
+    .btn-primary:hover { background: #1f3a5f; border-color: var(--blue); }
+    .btn-amber {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border-color: #5a3e00;
+    }
+    .btn-amber:hover { border-color: var(--amber); }
+    .btn-green {
+      background: var(--green-dim);
+      color: var(--green);
+      border-color: #1a4a22;
+    }
+    .btn-green:hover { border-color: var(--green); }
+    .btn-purple {
+      background: var(--purple-dim);
+      color: var(--purple);
+      border-color: #3d2a7a;
+    }
+    .btn-purple:hover { border-color: var(--purple); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .spin { display: inline-block; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Input row ── */
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .field-label { font-size: 11px; color: var(--muted); }
+    input[type=text], input[type=number], select, textarea {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.12s;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+    textarea { resize: vertical; min-height: 80px; font-family: var(--mono); font-size: 12px; }
+    select option { background: var(--surface2); }
+
+    /* ── Cards grid ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      transition: border-color 0.12s;
+    }
+    .card:hover { border-color: #484f58; }
+    .card-id {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .card-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .card-price {
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--green);
+      margin-top: 8px;
+    }
+    .card-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      margin-top: 6px;
+    }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .status-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .status-PENDIENTE  { background: var(--amber-dim);  color: var(--amber); }
+    .status-CONFIRMADO { background: var(--blue-dim);   color: var(--blue); }
+    .status-ENTREGADO  { background: var(--green-dim);  color: var(--green); }
+    .status-CANCELADO  { background: var(--red-dim);    color: var(--red); }
+
+    /* ── Form panel ── */
+    .form-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .form-panel-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    @media (max-width: 600px) { .form-grid, .form-grid-3 { grid-template-columns: 1fr; } }
+    .form-actions { margin-top: 14px; display: flex; gap: 8px; }
+
+    /* ── Estado / feedback ── */
+    .estado {
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-family: var(--mono);
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+    }
+    .estado.ok    { background: var(--green-dim);  border-color: #1a4a22; color: var(--green); }
+    .estado.error { background: var(--red-dim);    border-color: #5a1a1a; color: var(--red); }
+    .estado.loading { color: var(--blue); border-color: #1f4070; background: var(--blue-dim); }
+    .estado.hidden { display: none; }
+
+    /* ── Empty state ── */
+    .empty {
+      padding: 48px 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .empty-icon { font-size: 32px; margin-bottom: 10px; }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-dot"></span>
+    SOA Client
+  </div>
+  <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">via ESB</span>
+  <span class="esb-badge">→ esb:8080</span>
+</header>
+
+<nav>
+  <button class="tab-btn active" onclick="switchTab('clientes', this)">
+    <span class="tab-dot dot-clientes"></span>
+    Clientes
+  </button>
+  <button class="tab-btn" onclick="switchTab('productos', this)">
+    <span class="tab-dot dot-productos"></span>
+    Productos
+  </button>
+  <button class="tab-btn" onclick="switchTab('pedidos', this)">
+    <span class="tab-dot dot-pedidos"></span>
+    Pedidos
+  </button>
+</nav>
+
+<main>
+
+  <!-- ══════════════ CLIENTES ══════════════ -->
+  <div id="panel-clientes" class="panel active">
+
+    <div class="section-header">
+      <div class="section-title">
+        <span style="color:var(--amber)">●</span>
+        Clientes
+        <span class="endpoint-chip">GET /api/clientes</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-amber" onclick="fetchClientes()">
+          <span id="ico-clientes">↺</span> Cargar clientes
+        </button>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <div class="field-group" style="max-width:220px">
+        <label class="field-label">Buscar por ID</label>
+        <input type="text" id="cliente-id" placeholder="ej. 1" />
+      </div>
+      <div style="padding-top:18px">
+        <button class="btn btn-amber" onclick="fetchClienteById()">Buscar</button>
+      </div>
+    </div>
+
+    <div id="estado-clientes" class="estado hidden"></div>
+    <div id="resultado-clientes">
+      <div class="empty">
+        <div class="empty-icon">👤</div>
+        Haz clic en "Cargar clientes" para consultar al ESB
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ PRODUCTOS ══════════════ -->
+  <div id="panel-productos" class="panel">
+
+    <div class="section-header">
+      <div class="section-title">
+        <span style="color:var(--green)">●</span>
+        Productos
+        <span class="endpoint-chip">GET /api/productos</span>
+      </div>
+      <button class="btn btn-green" onclick="fetchProductos()">
+        <span id="ico-productos">↺</span> Cargar productos
+      </button>
+    </div>
+
+    <div class="input-row">
+      <div class="field-group" style="max-width:220px">
+        <label class="field-label">Buscar por ID</label>
+        <input type="text" id="producto-id" placeholder="ej. 3" />
+      </div>
+      <div class="field-group" style="max-width:200px">
+        <label class="field-label">Filtrar categoría</label>
+        <select id="categoria-filter" onchange="filterProductos()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div style="padding-top:18px">
+        <button class="btn btn-green" onclick="fetchProductoById()">Buscar</button>
+      </div>
+    </div>
+
+    <div id="estado-productos" class="estado hidden"></div>
+    <div id="resultado-productos">
+      <div class="empty">
+        <div class="empty-icon">📦</div>
+        Haz clic en "Cargar productos" para consultar al ESB
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ PEDIDOS ══════════════ -->
+  <div id="panel-pedidos" class="panel">
+
+    <!-- Formulario crear pedido -->
+    <div class="form-panel">
+      <div class="form-panel-title">Nuevo pedido</div>
+      <div class="form-grid">
+        <div class="field-group">
+          <label class="field-label">ID Cliente</label>
+          <input type="text" id="p-cliente-id" placeholder="ej. 42" />
+        </div>
+        <div class="field-group">
+          <label class="field-label">ID Producto</label>
+          <input type="text" id="p-producto-id" placeholder="ej. 7" />
+        </div>
+        <div class="field-group">
+          <label class="field-label">Cantidad</label>
+          <input type="number" id="p-cantidad" placeholder="1" min="1" value="1" />
+        </div>
+        <div class="field-group">
+          <label class="field-label">Precio unitario</label>
+          <input type="text" id="p-precio" placeholder="ej. 29.99" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-purple" onclick="crearPedido()">
+          <span id="ico-crear">+</span> Crear pedido
+        </button>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="section-header">
+      <div class="section-title">
+        <span style="color:var(--purple)">●</span>
+        Pedidos registrados
+        <span class="endpoint-chip">GET /api/pedidos</span>
+      </div>
+      <button class="btn btn-purple" onclick="fetchPedidos()">
+        <span id="ico-pedidos">↺</span> Cargar pedidos
+      </button>
+    </div>
+
+    <div id="estado-pedidos" class="estado hidden"></div>
+    <div id="resultado-pedidos">
+      <div class="empty">
+        <div class="empty-icon">🗒️</div>
+        Haz clic en "Cargar pedidos" para consultar al ESB
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// ÚNICA REGLA: todas las llamadas van a /api/* → proxy → ESB
+// NUNCA llamar directo a :8081, :8082, :8083
+// ═══════════════════════════════════════════════════════════════
+
+const API = {
+  clientes:  '/api/clientes',
+  productos: '/api/productos',
+  pedidos:   '/api/pedidos',
+};
+
+let _productosCache = [];
+
+// ── Utilidades ──────────────────────────────────────────────────
+function estado(id, msg, tipo = '') {
+  const el = document.getElementById('estado-' + id);
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.className = 'estado ' + tipo;
+  el.textContent = msg;
+}
+
+function setLoading(icoId, btnEl, on) {
+  const ico = document.getElementById(icoId);
+  if (ico) ico.className = on ? 'spin' : '';
+  if (on) ico.textContent = '↻';
+}
+
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.statusText);
+    throw new Error(`HTTP ${res.status} — ${txt}`);
+  }
+  return res.json();
+}
+
+// ── Tabs ────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ══════════════ CLIENTES ══════════════
+async function fetchClientes() {
+  estado('clientes', '← consultando ESB /esb/clientes …', 'loading');
+  setLoading('ico-clientes', null, true);
+  try {
+    const data = await apiFetch(API.clientes);
+    renderClientes(Array.isArray(data) ? data : data.results || [data]);
+    estado('clientes', `✓ ${Array.isArray(data) ? data.length : 1} cliente(s) recibidos del ESB`, 'ok');
+  } catch (e) {
+    estado('clientes', '✗ ' + e.message, 'error');
+  } finally {
+    setLoading('ico-clientes', null, false);
+    document.getElementById('ico-clientes').textContent = '↺';
+  }
+}
+
+async function fetchClienteById() {
+  const id = document.getElementById('cliente-id').value.trim();
+  if (!id) return;
+  estado('clientes', `← consultando ESB /esb/clientes/${id} …`, 'loading');
+  try {
+    const data = await apiFetch(`${API.clientes}/${id}`);
+    renderClientes([data]);
+    estado('clientes', `✓ cliente #${id} recibido del ESB`, 'ok');
+  } catch (e) {
+    estado('clientes', '✗ ' + e.message, 'error');
+  }
+}
+
+function renderClientes(lista) {
+  const el = document.getElementById('resultado-clientes');
+  if (!lista.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Sin resultados</div>'; return; }
+  el.innerHTML = `<div class="cards-grid">${lista.map(c => {
+    const nombre = c.name ? `${c.name.first || ''} ${c.name.last || ''}`.trim() : c.nombre || c.name || '—';
+    const email  = c.email || '—';
+    const ciudad = c.location?.city || c.ciudad || '—';
+    const pais   = c.location?.country || c.pais || '';
+    const id     = c.login?.uuid || c.id || '?';
+    return `<div class="card">
+      <div class="card-id"># ${id}</div>
+      <div class="card-name">${nombre}</div>
+      <div class="card-meta">
+        ${email}<br>
+        ${ciudad}${pais ? ', ' + pais : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ══════════════ PRODUCTOS ══════════════
+async function fetchProductos() {
+  estado('productos', '← consultando ESB /esb/productos …', 'loading');
+  setLoading('ico-productos', null, true);
+  try {
+    const data = await apiFetch(API.productos);
+    _productosCache = Array.isArray(data) ? data : [data];
+    poblarCategorias(_productosCache);
+    renderProductos(_productosCache);
+    estado('productos', `✓ ${_productosCache.length} producto(s) recibidos del ESB`, 'ok');
+  } catch (e) {
+    estado('productos', '✗ ' + e.message, 'error');
+  } finally {
+    setLoading('ico-productos', null, false);
+    document.getElementById('ico-productos').textContent = '↺';
+  }
+}
+
+async function fetchProductoById() {
+  const id = document.getElementById('producto-id').value.trim();
+  if (!id) return;
+  estado('productos', `← consultando ESB /esb/productos/${id} …`, 'loading');
+  try {
+    const data = await apiFetch(`${API.productos}/${id}`);
+    renderProductos([data]);
+    estado('productos', `✓ producto #${id} recibido del ESB`, 'ok');
+  } catch (e) {
+    estado('productos', '✗ ' + e.message, 'error');
+  }
+}
+
+function poblarCategorias(lista) {
+  const cats = [...new Set(lista.map(p => p.category || p.categoria).filter(Boolean))];
+  const sel = document.getElementById('categoria-filter');
+  sel.innerHTML = '<option value="">Todas</option>' +
+    cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function filterProductos() {
+  const cat = document.getElementById('categoria-filter').value;
+  const filtrados = cat ? _productosCache.filter(p => (p.category || p.categoria) === cat) : _productosCache;
+  renderProductos(filtrados);
+}
+
+function renderProductos(lista) {
+  const el = document.getElementById('resultado-productos');
+  if (!lista.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Sin resultados</div>'; return; }
+  el.innerHTML = `<div class="cards-grid">${lista.map(p => {
+    const nombre = p.title || p.nombre || p.name || '—';
+    const precio = p.price != null ? `$${Number(p.price).toFixed(2)}` : p.precio != null ? `$${Number(p.precio).toFixed(2)}` : '—';
+    const cat    = p.category || p.categoria || '';
+    const desc   = (p.description || p.descripcion || '').slice(0, 80) + ((p.description || p.descripcion || '').length > 80 ? '…' : '');
+    return `<div class="card">
+      <div class="card-id"># ${p.id || '?'}</div>
+      <div class="card-name">${nombre}</div>
+      <div class="card-meta">${desc}</div>
+      ${cat ? `<span class="card-badge" style="background:var(--green-dim);color:var(--green)">${cat}</span>` : ''}
+      <div class="card-price">${precio}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ══════════════ PEDIDOS ══════════════
+async function crearPedido() {
+  const clienteId  = document.getElementById('p-cliente-id').value.trim();
+  const productoId = document.getElementById('p-producto-id').value.trim();
+  const cantidad   = parseInt(document.getElementById('p-cantidad').value) || 1;
+  const precio     = parseFloat(document.getElementById('p-precio').value) || 0;
+
+  if (!clienteId || !productoId) {
+    estado('pedidos', '✗ ID de cliente e ID de producto son obligatorios', 'error');
+    return;
+  }
+
+  estado('pedidos', '← enviando pedido al ESB /esb/pedidos …', 'loading');
+  document.getElementById('ico-crear').className = 'spin';
+  document.getElementById('ico-crear').textContent = '↻';
+
+  try {
+    const body = { clienteId, productoId, cantidad, precioUnitario: precio };
+    const data = await apiFetch(API.pedidos, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    estado('pedidos', `✓ Pedido #${data.id || data.pedidoId || '?'} creado — estado: ${data.estado || 'PENDIENTE'}`, 'ok');
+    // Limpiar form
+    ['p-cliente-id','p-producto-id','p-precio'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('p-cantidad').value = '1';
+    fetchPedidos();
+  } catch (e) {
+    estado('pedidos', '✗ ' + e.message, 'error');
+  } finally {
+    document.getElementById('ico-crear').className = '';
+    document.getElementById('ico-crear').textContent = '+';
+  }
+}
+
+async function fetchPedidos() {
+  estado('pedidos', '← consultando ESB /esb/pedidos …', 'loading');
+  setLoading('ico-pedidos', null, true);
+  try {
+    const data = await apiFetch(API.pedidos);
+    renderPedidos(Array.isArray(data) ? data : data.pedidos || [data]);
+    estado('pedidos', '', '');
+  } catch (e) {
+    estado('pedidos', '✗ ' + e.message, 'error');
+  } finally {
+    setLoading('ico-pedidos', null, false);
+    document.getElementById('ico-pedidos').textContent = '↺';
+  }
+}
+
+function renderPedidos(lista) {
+  const el = document.getElementById('resultado-pedidos');
+  if (!lista.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>No hay pedidos aún</div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>ID</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Estado</th><th>Fecha</th>
+    </tr></thead>
+    <tbody>${lista.map(p => {
+      const estado = p.estado || p.status || 'PENDIENTE';
+      const fecha  = p.fecha || p.createdAt || p.fechaCreacion || '';
+      const fechaFmt = fecha ? new Date(fecha).toLocaleString('es-PE', { dateStyle:'short', timeStyle:'short' }) : '—';
+      const total  = p.total != null ? `$${Number(p.total).toFixed(2)}` : p.precioUnitario != null ? `$${Number(p.precioUnitario).toFixed(2)}` : '—';
+      return `<tr>
+        <td class="mono">#${p.id || p.pedidoId || '?'}</td>
+        <td class="mono">${p.clienteId || p.cliente || '—'}</td>
+        <td class="mono">${p.productoId || p.producto || '—'}</td>
+        <td>${p.cantidad || 1}</td>
+        <td class="mono">${total}</td>
+        <td><span class="status-badge status-${estado}">${estado}</span></td>
+        <td style="color:var(--muted);font-size:11px">${fechaFmt}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Fragmento para añadir a tu docker-compose.yml existente
+# Agrega el servicio cliente-app bajo `services:`
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Los servicios que ya tienes ──────────────────────────────────────────────
+  # esb-camel, servicio-clientes, servicio-productos, servicio-pedidos, db-pedidos
+  # (se omiten aquí — están en tu compose principal)
+
+  # ── NUEVO: Cliente app ───────────────────────────────────────────────────────
+  cliente-app:
+    build:
+      context: ./cliente-app
+      dockerfile: Dockerfile
+    container_name: cliente-app
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      # Dentro de la red Docker, el ESB se resuelve por nombre de servicio
+      ESB_URL: "http://esb-camel:8080"
+    depends_on:
+      - esb-camel
+    networks:
+      - soa-network
+    restart: unless-stopped
+
+# ── Red compartida (ya debe existir en tu compose) ────────────────────────────
+networks:
+  soa-network:
+    driver: bridge
