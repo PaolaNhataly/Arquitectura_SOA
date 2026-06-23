@@ -2,7 +2,7 @@
 
 Infraestructura de arquitectura **SOA**: 3 servicios SOAP con contrato propio
 (WSDL/XSD), registrados y enrutados por un **ESB** (Apache Camel), con un
-servicio persistiendo en PostgreSQL bajo **Clean Architecture**. De cara al
+servicio persistiendo en PostgreSQL. De cara al
 cliente final, todo se consume en JSON — el ESB es quien traduce a SOAP por
 dentro.
 
