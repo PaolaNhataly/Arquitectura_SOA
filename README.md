@@ -14,7 +14,7 @@ dentro.
 |---|---|---|---|
 | `servicio-clientes` | 8081 | SOAP | Datos de clientes (randomuser.me) |
 | `servicio-productos` | 8082 | SOAP | Datos de productos (Fake Store API) |
-| `servicio-pedidos` | 8083 | SOAP | Registra/lista pedidos · PostgreSQL · Clean Architecture |
+| `servicio-pedidos` | 8083 | SOAP | Registra/lista pedidos · PostgreSQL |
 | `db-pedidos` | 5432 (interno) | PostgreSQL | Persistencia de pedidos |
 | `esb-camel` | 8080 | REST/JSON ↔ SOAP | El **bus**: traduce y enruta a los 3 servicios |
 
@@ -110,19 +110,8 @@ Mismo patrón, consume [Fake Store API](https://fakestoreapi.com)
 fallos de la API externa.
 
 ### `servicio-pedidos` (8083) + `db-pedidos` (PostgreSQL)
-El servicio con lógica real, estructurado en **Clean Architecture**
-(puertos y adaptadores):
+El servicio con lógica real
 
-```
-domain/           → Pedido, ClienteInfo, ProductoInfo — Java puro, sin Spring/JPA
-application/      → RegistrarPedidoUseCase, ListarPedidosUseCase
-  port/           → interfaces: PedidoRepositoryPort, ClienteGatewayPort, ProductoGatewayPort
-infrastructure/
-  soap/           → PedidoEndpoint (solo traduce) + adaptadores SOAP que implementan los ports
-  persistence/    → PedidoJpaEntity + adaptador que implementa PedidoRepositoryPort
-  config/         → WSDL y RestTemplate
-contract/         → generado por JAXB a partir de pedidos.xsd (no se edita a mano)
-```
 
 Dos operaciones:
 - **`registrarPedido`** — recibe `clienteId`, `productoId`, `cantidad`. El
@@ -175,7 +164,7 @@ flowchart TB
         ESB["ESB · Apache Camel<br/>puerto 8080<br/>JSON afuera, SOAP adentro"]
         SC["servicio-clientes<br/>SOAP · 8081"]
         SP["servicio-productos<br/>SOAP · 8082"]
-        SPed["servicio-pedidos<br/>SOAP · 8083<br/>(Clean Architecture)"]
+        SPed["servicio-pedidos<br/>SOAP · 8083<br/>"]
         DB[("PostgreSQL<br/>db-pedidos")]
 
         ESB -->|SOAP| SC
@@ -215,38 +204,6 @@ sequenceDiagram
     E-->>C: JSON {id, clienteNombre, productoNombre, total, ...}
 ```
 
-### Capas de servicio-pedidos (Clean Architecture)
-```mermaid
-flowchart LR
-    subgraph Infraestructura
-        EP[PedidoEndpoint]
-        CA[ClienteSoapAdapter]
-        PA[ProductoSoapAdapter]
-        RA[PedidoRepositoryAdapter]
-    end
-    subgraph Aplicación
-        UC1[RegistrarPedidoUseCase]
-        UC2[ListarPedidosUseCase]
-        Port1(["ClienteGatewayPort"])
-        Port2(["ProductoGatewayPort"])
-        Port3(["PedidoRepositoryPort"])
-    end
-    subgraph Dominio
-        Pedido
-    end
-
-    EP --> UC1
-    EP --> UC2
-    UC1 --> Port1
-    UC1 --> Port2
-    UC1 --> Port3
-    UC1 --> Pedido
-    CA -.implementa.-> Port1
-    PA -.implementa.-> Port2
-    RA -.implementa.-> Port3
-```
-
----
 
 # cliente-app
 
@@ -305,6 +262,6 @@ ESB_URL=http://localhost:8080 npm run dev
 | Variable  | Default             | Descripción                                |
 |-----------|---------------------|--------------------------------------------|
 | `PORT`    | 3000                | Puerto del servidor Express                |
-| `ESB_URL` | http://esb:8080     | URL del ESB (ajustar nombre del servicio)  |
+| `ESB_URL` | http://esb:8080     | URL del ESB  |
 
 
